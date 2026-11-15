@@ -739,23 +739,31 @@ El diagrama debe ser coherente con la decisión arquitectónica documentada.
 ## 3. Tipos de Modelos y Matriz de Decisión Arquitectónica
 
 ### 3.1 Comparación de Tipos de Modelos
-Compara el comportamiento que observaste al interactuar con:
-1. **Modelo Rápido / Estándar (ej. Flash, Mini, Haiku o modo estándar)**:
-2. **Modelo de Razonamiento Extendido (*Thinking Model*)**:
-- ¿En cuál de las tareas de la semana fue indispensable el modelo de razonamiento y en cuál bastó el modelo rápido?
+
+Durante el trabajo de IncidentOps utilicé ChatGPT gratis en modo estándar y con Thinking, y también GPT-6 Luna. La interfaz de ChatGPT gratis no me confirmó el nombre exacto del modelo usado, por lo que no atribuyo esa experiencia a una versión concreta.
+
+1. **Modelo rápido / estándar (ChatGPT gratis en modo estándar y GPT-6 Luna)**:
+   - Me resultó suficiente para tareas acotadas con criterios claros: localizar archivos, aplicar cambios definidos, resumir resultados y ejecutar verificaciones conocidas. GPT-6 Luna fue otra opción rápida para trabajar sobre instrucciones concretas.
+   - Su ventaja práctica fue obtener respuestas directas con menor espera. Para decisiones con muchos casos borde, de todos modos tuve que revisar cuidadosamente las reglas y los resultados; una respuesta rápida no sustituye esa validación.
+
+2. **Modelo de razonamiento extendido (Thinking)**:
+   - Fue más útil al descomponer problemas con varias condiciones dependientes, comparar alternativas y comprobar consistencia entre requisitos. En IncidentOps, el cálculo de SLA exigió razonar sobre cruces de fin de semana, límites de jornada, horario 24/7, umbral de escalamiento y persistencia después del incumplimiento.
+   - También aportó valor al estructurar el ADR antes de implementar, porque había que hacer explícitas las decisiones y sus consecuencias. El razonamiento no elimina errores: las conclusiones se contrastaron con los criterios acordados y con casos deterministas.
+
+**¿En cuál tarea fue indispensable el razonamiento y en cuál bastó el modelo rápido?** Para preparar el análisis arquitectónico del SLA y revisar los casos borde, Thinking fue el más apropiado; para ejecutar la refactorización una vez fijadas las reglas, actualizar la demostración y revisar salidas concretas, bastó el modo rápido. No considero que Thinking fuera estrictamente indispensable: la diferencia principal fue el esfuerzo necesario para llegar a una respuesta completa y ordenada.
 
 ### 3.2 Matriz de Decisión Arquitectónica
-Para la plataforma *IncidentOps* y su evolución futura, justifica qué paradigma es el adecuado en cada escenario:
+
+Para IncidentOps, se elige el paradigma según el tipo de problema. Las decisiones normativas y repetibles permanecen en código determinista; el asistente GenAI apoya el análisis de ingeniería; los modelos clásicos sirven para patrones numéricos a escala; y un LLM en ejecución se reserva para texto abierto que las reglas no cubren, con controles de validación.
 
 | Escenario / Requerimiento | Paradigma Elegido (Código Determinista / ML Clásico / Asistente GenAI en Chat / LLM en Tiempo de Ejecución) | Justificación Técnica (Determinismo, Costo, Latencia, Riesgo de Alucinación) |
 | :--- | :--- | :--- |
-| 1. Contabilizar minutos hábiles transcurridos y verificar si un ticket superó el 75% de su SLA | | |
-| 2. Explorar casos borde y redactar un ADR antes de modificar la arquitectura de consultas SQL | | |
-| 3. Detectar anomalías numéricas en millones de métricas de CPU/RAM por minuto | | |
-| 4. Clasificar reportes de incidentes redactados en lenguaje natural abierto cuando las reglas deterministas no cubren nuevos patrones | | |
+| 1. Contabilizar minutos hábiles transcurridos y verificar si un ticket superó el 75% de su SLA | **Código Determinista** | El horario, el calendario semanal, el límite del SLA y el umbral son reglas explícitas. El código produce resultados repetibles, con baja latencia y costo; un LLM añadiría variabilidad y riesgo sin aportar valor al cálculo. |
+| 2. Explorar casos borde y redactar un ADR antes de modificar la arquitectura de consultas SQL | **Asistente GenAI en Chat** | Es una tarea de análisis y documentación que se beneficia de comparar alternativas, exponer trade-offs y organizar decisiones antes de tocar el sistema. No es una ruta de ejecución por incidente. El costo y la latencia son aceptables para trabajo de ingeniería; el equipo debe revisar supuestos y validar el ADR para reducir errores o información inventada. |
+| 3. Detectar anomalías numéricas en millones de métricas de CPU/RAM por minuto | **ML Clásico** | Un detector estadístico o modelo clásico puede procesar series numéricas a escala con latencia y costo previsibles, y aprender patrones de comportamiento. Un LLM es innecesario para millones de mediciones y resulta menos adecuado para detección numérica continua. Se deben validar falsos positivos y cambios en los datos. |
+| 4. Clasificar reportes de incidentes redactados en lenguaje natural abierto cuando las reglas deterministas no cubren nuevos patrones | **LLM en Tiempo de Ejecución** | El lenguaje abierto y los patrones nuevos pueden exceder reglas enumeradas. Un LLM puede interpretar el reporte y proponer una clasificación, pero implica mayor costo y latencia que reglas locales, además de riesgo de alucinación. La salida debe validarse contra severidades y equipos permitidos, registrar su justificación y permitir revisión o fallback cuando la evidencia sea insuficiente. |
 
 ---
-
 ## 4. Economía de Tokens y Curaduría de Contexto con `tiktoken` (LSP vs. `grep`/`read` vs. `glob`/`read`)
 
 ### 4.1 Medición Empírica en *IncidentOps*
