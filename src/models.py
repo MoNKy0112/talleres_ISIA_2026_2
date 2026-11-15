@@ -6,6 +6,7 @@ from typing import Literal, Optional
 
 SeverityLevel = Literal["P0", "P1", "P2", "P3"]
 IncidentStatus = Literal["OPEN", "IN_PROGRESS", "ESCALATION_REQUIRED", "RESOLVED"]
+RecommendedTeam = Literal["Backend-Core", "Platform-SRE", "Data-DBA", "Security-IAM"]
 
 
 @dataclass(frozen=True)
@@ -52,5 +53,7 @@ class TriageResult:
     severity: SeverityLevel
     component: str
     rationale: str
+    recommended_team: RecommendedTeam
+    duplicate_group_key: str
     consistency_ratio: float = 1.0
 
