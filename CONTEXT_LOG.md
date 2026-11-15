@@ -761,11 +761,49 @@ Para la plataforma *IncidentOps* y su evolución futura, justifica qué paradigm
 ### 4.1 Medición Empírica en *IncidentOps*
 Completa la tabla con los resultados obtenidos al auditar los símbolos con `uv run python -m src.context_audit --symbol evaluate_sla_status` (y `classify_incident_report`):
 
-| Estrategia de Recolección de Contexto | Alcance (Archivos / Nodos) | Caracteres Totales | Tokens (`tiktoken o200k_base`) | % de Reducción vs. Fuerza Bruta |
-| :--- | :--- | :---: | :---: | :---: |
-| **1. Fuerza Bruta (`glob` + `read` todo)** | Todos los archivos del proyecto | | | 0% (Línea base) |
-| **2. Búsqueda Textual (`grep` + `read` `.py`)** | Archivos `.py` donde aparece el símbolo | | | |
-| **3. Semántica vía LSP (`definition` + `references` + `hover`)** | Solo definición, tipos asociados y líneas de invocación | | | |
+#### uv run python -m src.context_audit --symbol classify_incident_report
+====================================================================================
+AUDITORÍA DE CONTEXT ENGINEERING: Símbolo objetivo `classify_incident_report`
+ Tokenizador activo: tiktoken (o200k_base)
+====================================================================================
+Estrategia                             | Alcance            | Caracteres | Tokens
+------------------------------------------------------------------------------------
+1. Fuerza Bruta (glob + read todo)     | 9 archivos         | 45675      | 11325 tokens
+2. Búsqueda Textual (grep + read .py)  | 2 archivos .py     | 8236       | 1972 tokens
+3. Semántica vía LSP (AST/Symbols)     | Definición+Refs    | 7385       | 1809 tokens
+------------------------------------------------------------------------------------
+-> Reducción LSP vs. Fuerza Bruta (`glob` + `read`): 84.0% menos tokens
+-> Reducción LSP vs. Búsqueda (`grep` + `read` .py): 8.3% menos tokens
+
+#### uv run python -m src.context_audit --symbol evaluate_sla_status
+
+====================================================================================
+ AUDITORÍA DE CONTEXT ENGINEERING: Símbolo objetivo `evaluate_sla_status`
+ Tokenizador activo: tiktoken (o200k_base)
+====================================================================================
+Estrategia                             | Alcance            | Caracteres | Tokens
+------------------------------------------------------------------------------------
+1. Fuerza Bruta (glob + read todo)     | 9 archivos         | 45675      | 11325 tokens
+2. Búsqueda Textual (grep + read .py)  | 4 archivos .py     | 26676      | 6520 tokens
+3. Semántica vía LSP (AST/Symbols)     | Definición+Refs    | 4383       | 1118 tokens
+------------------------------------------------------------------------------------
+-> Reducción LSP vs. Fuerza Bruta (`glob` + `read`): 90.1% menos tokens
+-> Reducción LSP vs. Búsqueda (`grep` + `read` .py): 82.9% menos tokens
+
 
 ### 4.2 Comparación de Formatos de Serialización (`--compare-formats`)
 Registra los tokens medidos con `tiktoken` para los 10 incidentes en JSON indentado, JSON compacto, YAML y CSV, y explica qué formato elegirías al inyectar datos tabulares o logs largos en la ventana de contexto.
+
+#### uv run python -m src.context_audit --compare-formats
+
+==========================================================================
+ IMPACTO DEL FORMATO DE DATOS EN LA VENTANA DE CONTEXTO (10 Incidentes)
+ Tokenizador activo: tiktoken (o200k_base)
+==========================================================================
+Formato de Serialización       | Caracteres   | Tokens
+--------------------------------------------------------------------------
+JSON Indentado (indent=2)      | 2942         | 878 tokens
+JSON Compacto (minified)       | 2641         | 728 tokens
+YAML Equivalente               | 2579         | 755 tokens
+CSV Delimitado por '|'         | 2171         | 617 tokens
+--------------------------------------------------------------------------
