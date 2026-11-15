@@ -528,13 +528,210 @@ Finalmente, explica cómo verificar que los diez incidentes tengan una clasifica
 ### 2.1 Exploración de Diseño (Sin Generar Código Aún) y Destilación
 - **Objetivo explorado**: Diseño del algoritmo de cálculo de SLA en horario hábil (`P2`/`P3`, Lunes–Viernes 08:00–18:00) vs. 24/7 (`P0`/`P1`) y regla de escalamiento preventivo al 75%.
 - **Síntesis de tu exploración de alternativas y resumen destilado (máx. 10 líneas)**:
-  > `[Describe qué dudas e hipótesis iniciales exploraste, qué casos borde descubriste junto con el modelo (creación en fin de semana, fuera de horario, cruces de varios días) y pega el bloque destilado que llevaste al nuevo chat limpio]`
+Se exploraron tres alternativas: iteración día por día, cálculo matemático por semanas completas y uso de librerías externas. Se seleccionó la iteración diaria por su simplicidad, legibilidad y facilidad de pruebas.
+Se identificaron casos borde como incidentes creados en fines de semana, antes de las 08:00, después de las 18:00 y aquellos que atraviesan varios fines de semana.
+P0 y P1 contabilizarán todos los minutos transcurridos (24/7).
+P2 y P3 contabilizarán únicamente minutos de lunes a viernes, entre las 08:00 y las 18:00 (máximo 600 minutos diarios).
+Los intervalos se limitarán al horario laboral y los fines de semana contabilizarán cero minutos.
+El cálculo recorrerá cada día del intervalo, manteniendo complejidad temporal O(D).
+El escalamiento se activará al alcanzar el 75% del SLA y permanecerá activo después del incumplimiento.
+Se descartó el cálculo por semanas completas por su mayor complejidad y las librerías externas por introducir dependencias innecesarias.
+Se deben validar las zonas horarias, los límites temporales y el tratamiento de festivos entre semana.
+También debe confirmarse el comportamiento del escalamiento para incidentes resueltos que incumplieron el SLA.
 
 ### 2.2 Ejecución con Contexto Curado en Nuevo Chat Limpio (*Context Engineering*)
 Copia el prompt estructurado con etiquetas XML que utilizaste en un nuevo chat limpio para generar el **ADR (`docs/adr/002-calculo-sla-horario-habil.md`)** y la refactorización de `src/sla_calculator.py`:
 
 ```xml
-<!-- Pega aquí tu prompt estructurado con <context>, <decision_summary>, <constraints>, <task> -->
+<role>
+
+Actúa como arquitecto de software senior con experiencia en Architecture Decision Records (ADR), Python, diseño de algoritmos y sistemas de gestión de incidentes.
+</role>
+<context>
+
+Estoy trabajando en IncidentOps, una plataforma de gestión de incidentes que requiere corregir el cálculo de SLA en `src/sla_calculator.py`.
+
+El siguiente bloque contiene el contexto técnico real de la función que se va a modificar:
+
+<lsp_context symbol="evaluate_sla_status">
+  <!-- 1. Definiciones de Tipos y Políticas (LSP Hover / Type Definition) -->
+# [LSP textDocument/hover type] src\models.py:13
+class SLARule:
+    """Define el acuerdo de nivel de servicio (SLA) para un nivel de severidad."""
+
+    severity: SeverityLevel
+    max_resolution_minutes: int
+    operates_24x7: bool
+    escalation_threshold_ratio: float = 0.75
+
+# [LSP textDocument/hover type] src\models.py:23
+class Incident:
+    """Representa un incidente registrado en la plataforma IncidentOps."""
+
+    incident_id: str
+    title: str
+    component: str
+    severity: SeverityLevel
+    status: IncidentStatus
+    created_at: datetime
+    resolved_at: Optional[datetime] = None
+
+# [LSP textDocument/hover type] src\models.py:36
+class SLAEvaluation:
+    """Resultado determinista de la evaluación de SLA de un incidente."""
+
+    incident_id: str
+    severity: SeverityLevel
+    elapsed_minutes: int
+    allowed_minutes: int
+    remaining_minutes: int
+    is_breached: bool
+    requires_escalation: bool
+
+# [LSP textDocument/hover type] src\models.py:49
+class TriageResult:
+    """Resultado estructurado producido por el clasificador de triaje con IA."""
+
+    incident_id: str
+    severity: SeverityLevel
+    component: str
+    rationale: str
+    recommended_team: RecommendedTeam
+    duplicate_group_key: str
+    consistency_ratio: float = 1.0
+
+# [LSP textDocument/hover symbol] src\sla_calculator.py:17
+SLA_POLICY_TABLE: Dict[SeverityLevel, SLARule] = {
+    "P0": SLARule(severity="P0", max_resolution_minutes=60, operates_24x7=True),
+    "P1": SLARule(severity="P1", max_resolution_minutes=240, operates_24x7=True),
+    "P2": SLARule(severity="P2", max_resolution_minutes=480, operates_24x7=False),
+    "P3": SLARule(severity="P3", max_resolution_minutes=1440, operates_24x7=False),
+}
+
+  <!-- 2. Definición Exacta del Símbolo (LSP GoToDefinition) -->
+# [LSP textDocument/definition] src\sla_calculator.py:25
+def get_sla_rule_for_severity(severity: SeverityLevel) -> SLARule:
+    """Obtiene la regla de SLA aplicable a una severidad validada contra latabla."""
+    if severity not in SLA_POLICY_TABLE:
+        raise ValueError(f"Severidad no válida: {severity}")
+    return SLA_POLICY_TABLE[severity]
+
+# [LSP textDocument/definition] src\sla_calculator.py:32
+def evaluate_sla_status(incident: Incident, reference_time: datetime) -> SLAEvaluation:
+    """Evalúa si un incidente ha incumplido su SLA o requiere escalamiento preventivo.
+
+    Args:
+        incident: Entidad del incidente a evaluar.
+        reference_time: Marca de tiempo actual o de cierre contra la cual medir.
+
+    Returns:
+        SLAEvaluation con los minutos transcurridos, restantes y banderas de estado.
+    """
+    rule = get_sla_rule_for_severity(incident.severity)
+    end_time = incident.resolved_at or reference_time
+
+    if end_time < incident.created_at:
+        raise ValueError("El tiempo de referencia no puede ser anterior a la creación.")
+
+    # TODO(week-1-taller): Cuando rule.operates_24x7 es False (P2 y P3), solo deben
+    # contabilizarse los minutos dentro del horario hábil (Lunes-Viernes 08:00-18:00).
+    delta_seconds = (end_time - incident.created_at).total_seconds()
+    elapsed_minutes = int(delta_seconds // 60)
+
+    remaining_minutes = rule.max_resolution_minutes - elapsed_minutes
+    is_breached = elapsed_minutes > rule.max_resolution_minutes
+
+    escalation_limit = int(rule.max_resolution_minutes * rule.escalation_threshold_ratio)
+    requires_escalation = (
+        incident.status != "RESOLVED"
+        and not is_breached
+        and elapsed_minutes >= escalation_limit
+    )
+
+    return SLAEvaluation(
+        incident_id=incident.incident_id,
+        severity=incident.severity,
+        elapsed_minutes=elapsed_minutes,
+        allowed_minutes=rule.max_resolution_minutes,
+        remaining_minutes=remaining_minutes,
+        is_breached=is_breached,
+        requires_escalation=requires_escalation,
+    )
+
+  <!-- 3. Referencias de Invocación en el Proyecto (LSP FindReferences) -->
+# [LSP textDocument/references] src\incident_repository.py:146
+  L145:             )
+  L146:             sla_eval = evaluate_sla_status(incident, reference_time=reference_time)
+  L147:             results.append(
+
+# [LSP textDocument/references] src\sla_calculator.py:87
+  L86:     monday_morning = datetime(2026, 11, 9, 9, 0, 0)
+  L87:     evaluation = evaluate_sla_status(sample_incident, reference_time=monday_morning)
+  L88: 
+</lsp_context> <lsp_context>]
+</context>
+
+<adr_template>
+El documento debe respetar la estructura y las convenciones establecidas en la plantilla oficial del proyecto.
+
+<adr_template>
+ docs/adr/000-template.md
+</adr_template>
+</adr_template>
+
+
+<decision_summary>
+1. Seleccionar iteración día por día mediante intersección de intervalos laborales, sin dependencias externas.
+2. P0 y P1 contabilizan todos los minutos transcurridos (operación 24/7).
+3. P2 y P3 contabilizan minutos de lunes a viernes, de 08:00 a 18:00, máximo 600 por jornada.
+4. Las creaciones anteriores a las 08:00 comienzan a contabilizar desde esa hora; las posteriores a las 18:00, desde el siguiente día hábil.
+5. Sábados y domingos contabilizan cero minutos para P2 y P3.
+6. Recorrer los días del intervalo entre creación y evaluación, manteniendo complejidad temporal O(D).
+7. Activar el escalamiento al alcanzar el 75% del SLA y mantenerlo activo después del incumplimiento.
+8. Descartar el cálculo matemático por semanas completas por su mayor complejidad y las librerías externas por dependencias innecesarias.
+9. Conservar el truncamiento de minutos y validar fechas y zonas horarias.
+10. Confirmar el tratamiento de festivos entre semana y el escalamiento de incidentes resueltos que incumplieron el SLA.
+</decision_summary>
+
+<constraints>
+
+1. P0 y P1 deben contabilizar tiempo de manera continua, las 24 horas del día y los 7 días de la semana.
+2. P2 y P3 deben contabilizar únicamente tiempo hábil.
+3. El horario hábil corresponde a lunes a viernes de 08:00 a 18:00.
+4. Cada jornada laboral tiene un máximo de 600 minutos contabilizables.
+5. Los sábados y domingos no contabilizan tiempo para P2 y P3.
+6. Un incidente sin resolver debe activar el escalamiento cuando alcance o supere el 75% del tiempo permitido por su SLA.
+7. Si el SLA ya fue incumplido (`is_breached=True`), `requires_escalation` debe permanecer activado.
+8. La solución debe ser sencilla, legible, mantenible y sin dependencias externas pesadas.
+9. La complejidad temporal esperada para el cálculo de horario hábil es O(D), donde D es el número de días del intervalo.
+10. Se deben respetar los modelos, campos y estructuras existentes en el código. No se deben inventar atributos ni modificar contratos sin justificación.
+
+</constraints>
+
+<task>
+
+Genera el documento:
+
+`docs/adr/002-calculo-sla-horario-habil.md`
+
+El ADR debe documentar formalmente la decisión arquitectónica para corregir el cálculo de SLA en horario hábil y el escalamiento preventivo.
+
+El documento debe:
+
+1. Seguir la estructura de la plantilla ADR proporcionada.
+2. Describir el contexto y el problema técnico actual.
+3. Explicar las reglas del dominio para incidentes 24/7 y horario hábil.
+4. Documentar las alternativas evaluadas y la decisión seleccionada.
+5. Justificar la complejidad temporal O(D).
+6. Explicar cómo se manejan los casos borde de creación y evaluación fuera del horario laboral, fines de semana y múltiples semanas.
+7. Documentar la lógica de escalamiento preventivo y la persistencia del escalamiento después de incumplir el SLA.
+8. Identificar consecuencias positivas, negativas y posibles riesgos.
+9. Incluir un diagrama Mermaid (`flowchart TD` o `stateDiagram-v2`) que represente el flujo de cálculo del tiempo y la transición al escalamiento.
+
+El diagrama debe ser coherente con la decisión arquitectónica documentada.
+
+</task>
+
 ```
 
 ---
