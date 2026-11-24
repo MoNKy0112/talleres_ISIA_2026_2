@@ -14,6 +14,7 @@ from src.adapters.outbound.sqlite_repository import SQLiteIncidentRepository
 from src.application.ports import IncidentRepositoryPort
 from src.application.services import IncidentService
 from src.domain.models import Incident
+from src.domain.models import OPEN_DUPLICATE_STATUSES
 
 
 REFERENCE_TIME = datetime(2026, 11, 23, 12, 0, tzinfo=timezone.utc)
@@ -145,8 +146,10 @@ def test_sqlite_repository_implements_port_and_repository_operations():
     assert repository.get_incident("INC-OPEN-1") == open_one
     assert repository.get_incident("missing") is None
     assert repository.find_open_duplicates(
-        "payments-gateway", "payments-gateway:http-502"
-    ) == [open_one, open_two]
+        "payments-gateway:http-502",
+        OPEN_DUPLICATE_STATUSES,
+        "INC-NEW",
+    ) == [open_one, open_two, in_progress]
     assert repository.list_active_incidents("payments-gateway") == [
         open_one,
         open_two,
@@ -197,7 +200,9 @@ def test_repository_reads_legacy_naive_timestamps_as_utc(tmp_path):
     assert incident is not None
     assert incident.created_at == datetime(2026, 11, 23, 11, 0, tzinfo=timezone.utc)
     assert repository.find_open_duplicates(
-        "payments-gateway", "payments-gateway:http-502"
+        "payments-gateway:http-502",
+        OPEN_DUPLICATE_STATUSES,
+        "INC-NEW",
     ) == []
 
 
@@ -210,8 +215,12 @@ def test_repository_factory_defaults_to_in_memory_and_rejects_unknown_schemes(
 
     assert isinstance(repository, SQLiteIncidentRepository)
     assert repository.check_health() is True
-    with pytest.raises(ValueError, match="Unsupported DATABASE_URL scheme"):
-        create_repository("postgresql://localhost/incidents")
+    from src.adapters.outbound.postgres_repository import PostgresIncidentRepository
+
+    assert isinstance(
+        create_repository("postgresql://localhost/incidents"),
+        PostgresIncidentRepository,
+    )
 
 
 def test_repository_factory_opens_absolute_sqlite_path(tmp_path):

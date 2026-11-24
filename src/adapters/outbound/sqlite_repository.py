@@ -5,7 +5,7 @@ import sqlite3
 from typing import cast
 
 from src.application.ports import IncidentRepositoryPort
-from src.domain.models import Incident, IncidentStatus, SeverityLevel
+from src.domain.models import Incident, IncidentStatus, RecommendedTeam, SeverityLevel
 from src.domain.sla_calculator import SLA_POLICY_TABLE
 
 
@@ -33,8 +33,10 @@ class SQLiteIncidentRepository(IncidentRepositoryPort):
             CREATE TABLE IF NOT EXISTS incidents (
                 incident_id TEXT PRIMARY KEY,
                 title TEXT NOT NULL,
+                raw_text TEXT,
                 component TEXT NOT NULL,
-                duplicate_group_key TEXT NOT NULL,
+                recommended_team TEXT,
+                duplicate_group_key TEXT,
                 severity TEXT NOT NULL,
                 status TEXT NOT NULL,
                 created_at TEXT NOT NULL,
@@ -50,6 +52,10 @@ class SQLiteIncidentRepository(IncidentRepositoryPort):
             cursor.execute(
                 "ALTER TABLE incidents ADD COLUMN duplicate_group_key TEXT"
             )
+        if "recommended_team" not in columns:
+            cursor.execute("ALTER TABLE incidents ADD COLUMN recommended_team TEXT")
+        if "raw_text" not in columns:
+            cursor.execute("ALTER TABLE incidents ADD COLUMN raw_text TEXT")
         cursor.execute(
             """
             UPDATE incidents
@@ -60,6 +66,10 @@ class SQLiteIncidentRepository(IncidentRepositoryPort):
         cursor.execute(
             "CREATE INDEX IF NOT EXISTS idx_incidents_component_status "
             "ON incidents (component, status)"
+        )
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_incidents_dup_key "
+            "ON incidents (duplicate_group_key, status)"
         )
         for rule in SLA_POLICY_TABLE.values():
             cursor.execute(
@@ -77,18 +87,20 @@ class SQLiteIncidentRepository(IncidentRepositoryPort):
         self.connection.commit()
 
     def save_incident(self, incident: Incident) -> None:
-        """Inserta o reemplaza el registro identificado por incident_id."""
+        """Inserta el registro; nunca reemplaza silenciosamente un ID existente."""
         self.connection.execute(
             """
-            INSERT OR REPLACE INTO incidents (
-                incident_id, title, component, duplicate_group_key, severity,
-                status, created_at, resolved_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO incidents (
+                incident_id, title, raw_text, component, recommended_team,
+                duplicate_group_key, severity, status, created_at, resolved_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 incident.incident_id,
                 incident.title,
+                incident.raw_text,
                 incident.component,
+                incident.recommended_team,
                 incident.duplicate_group_key,
                 incident.severity,
                 incident.status,
@@ -108,18 +120,30 @@ class SQLiteIncidentRepository(IncidentRepositoryPort):
         ).fetchone()
         return _incident_from_row(row) if row is not None else None
 
+    def incident_id_exists(self, incident_id: str) -> bool:
+        row = self.connection.execute(
+            "SELECT 1 FROM incidents WHERE incident_id = ?", (incident_id,)
+        ).fetchone()
+        return row is not None
+
     def find_open_duplicates(
-        self, component: str, duplicate_group_key: str
+        self,
+        duplicate_group_key: str,
+        open_statuses: frozenset[IncidentStatus],
+        exclude_incident_id: str,
     ) -> list[Incident]:
+        if not open_statuses:
+            return []
+        status_placeholders = ", ".join("?" for _ in open_statuses)
         rows = self.connection.execute(
-            """
+            f"""
             SELECT * FROM incidents
-            WHERE status = 'OPEN'
-              AND component = ?
+            WHERE status IN ({status_placeholders})
               AND duplicate_group_key = ?
+              AND incident_id != ?
             ORDER BY incident_id
             """,
-            (component, duplicate_group_key),
+            (*sorted(open_statuses), duplicate_group_key, exclude_incident_id),
         ).fetchall()
         return [_incident_from_row(row) for row in rows]
 
@@ -166,8 +190,18 @@ def _incident_from_row(row: sqlite3.Row) -> Incident:
     return Incident(
         incident_id=row["incident_id"],
         title=row["title"],
+        raw_text=row["raw_text"] if "raw_text" in row.keys() else None,
         component=row["component"],
-        duplicate_group_key=row["duplicate_group_key"],
+        recommended_team=(
+            cast(RecommendedTeam, row["recommended_team"])
+            if "recommended_team" in row.keys() and row["recommended_team"] is not None
+            else None
+        ),
+        duplicate_group_key=(
+            row["duplicate_group_key"]
+            if "duplicate_group_key" in row.keys()
+            else None
+        ),
         severity=cast(SeverityLevel, row["severity"]),
         status=cast(IncidentStatus, row["status"]),
         created_at=created_at,
@@ -177,4 +211,3 @@ def _incident_from_row(row: sqlite3.Row) -> Incident:
 
 def _parse_utc(value: str) -> datetime:
     return _as_utc(datetime.fromisoformat(value))
-

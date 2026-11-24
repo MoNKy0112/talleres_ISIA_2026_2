@@ -12,3 +12,4 @@ ban-relative-imports = "parents"
 "fastapi" = { msg = "Domain code must not depend on HTTP frameworks." }
 "typer" = { msg = "Domain code must not depend on CLI frameworks." }
 "sqlite3" = { msg = "Domain code must not depend on database drivers." }
+"psycopg" = { msg = "Domain code must not depend on database drivers." }

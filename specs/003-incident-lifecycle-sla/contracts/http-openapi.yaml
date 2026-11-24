@@ -1,0 +1,116 @@
+openapi: 3.1.0
+info:
+  title: IncidentOps Lifecycle API
+  version: 1.0.0
+paths:
+  /api/v1/incidents:
+    post:
+      operationId: createIncident
+      summary: Register and classify an incident
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateIncidentRequest"
+            example:
+              title: "Pagos devuelve HTTP 502"
+              raw_text: "El gateway de pagos devuelve 502 al completar una transacción"
+      responses:
+        "201":
+          description: Incident persisted, including classification and duplicate result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IncidentCreatedResponse"
+        "422":
+          description: Required text is missing/blank or an optional value is invalid
+  /api/v1/incidents/{incident_id}/sla:
+    get:
+      operationId: evaluateIncidentSla
+      summary: Evaluate the SLA for a persisted incident
+      parameters:
+        - name: incident_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: reference_time
+          in: query
+          required: false
+          description: ISO 8601; naive values are interpreted as UTC, aware values normalized to UTC.
+          schema:
+            type: string
+            format: date-time
+      responses:
+        "200":
+          description: Deterministic SLA evaluation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SLAEvaluationResponse"
+        "404":
+          description: Incident does not exist
+        "422":
+          description: Invalid reference time or reference precedes created_at
+components:
+  schemas:
+    CreateIncidentRequest:
+      type: object
+      additionalProperties: false
+      required: [title, raw_text]
+      properties:
+        title:
+          type: string
+          minLength: 1
+        raw_text:
+          type: string
+          minLength: 1
+        incident_id:
+          type: string
+          description: Optional caller-provided unique identifier; otherwise INC- plus eight hexadecimal characters.
+        created_at:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum: [OPEN, IN_PROGRESS, ESCALATION_REQUIRED, RESOLVED]
+          default: OPEN
+    Classification:
+      type: object
+      required: [incident_id, severity, component, rationale, recommended_team, duplicate_group_key, consistency_ratio]
+      properties:
+        incident_id: {type: string}
+        severity: {type: string, enum: [P0, P1, P2, P3]}
+        component: {type: string}
+        rationale: {type: string}
+        recommended_team: {type: string, enum: [Backend-Core, Platform-SRE, Data-DBA, Security-IAM]}
+        duplicate_group_key: {type: string}
+        consistency_ratio: {type: number}
+    IncidentCreatedResponse:
+      allOf:
+        - $ref: "#/components/schemas/Classification"
+        - type: object
+          required: [title, status, created_at, is_duplicate, duplicate_of]
+          properties:
+            title: {type: string}
+            status: {type: string, enum: [OPEN, IN_PROGRESS, ESCALATION_REQUIRED, RESOLVED]}
+            created_at: {type: string, format: date-time}
+            is_duplicate: {type: boolean}
+            duplicate_of:
+              type: array
+              items: {type: string}
+    SLAEvaluationResponse:
+      type: object
+      required: [incident_id, component, severity, status, elapsed_minutes, allowed_minutes, remaining_minutes, is_breached, requires_escalation]
+      properties:
+        incident_id: {type: string}
+        component: {type: string}
+        severity: {type: string, enum: [P0, P1, P2, P3]}
+        status: {type: string, enum: [OPEN, IN_PROGRESS, ESCALATION_REQUIRED, RESOLVED]}
+        elapsed_minutes: {type: integer}
+        allowed_minutes: {type: integer}
+        remaining_minutes: {type: integer}
+        exceeded_minutes: {type: integer}
+        is_breached: {type: boolean}
+        requires_escalation: {type: boolean}

@@ -1,14 +1,16 @@
 <!--
 Sync Impact Report
-- Version: unversioned -> 1.0.0 (first versioned formalization)
+- Version: 1.0.0 -> 1.1.0
 - Modified principles:
-  - Dominio determinista único -> I. Deterministic Domain Authority
-  - Arquitectura Hexagonal -> II. Strict Hexagonal Boundaries
-  - Gobernanza técnica y calidad -> V. Verifiable Quality
-- Added sections: Technology Constraints; Quality Gates
+  - IV. Replaceable Persistence -> materially expanded to govern dual
+    SQLite/PostgreSQL persistence, driver boundaries, factory selection, temporal
+    parity, and real connectivity health checks.
+- Added sections: None
 - Removed sections: None
-- Follow-up TODOs: Original ratification date is unknown. ADR-001 is referenced by
-  the source request but was not found under docs/adr/.
+- Follow-up TODOs:
+  - Original ratification date remains unknown.
+  - ADR-001 is referenced by ADR-004 as partially replaced but its historical file
+    was not found under docs/adr/.
 -->
 
 # IncidentOps Constitution
@@ -47,13 +49,31 @@ Inbound adapters are responsible for translating and validating transport input
 and serializing output; business decisions remain in the domain/application core.
 
 ### IV. Replaceable Persistence
-Outbound adapters under `src/adapters/outbound/` implement application ports and
-MUST be replaceable without changing domain rules or inbound contracts.
-`DATABASE_URL` selects/configures persistence only at the composition or adapter
-boundary; it MUST NOT enter domain policy or use-case decisions. SQLite3 from the
-Python standard library is the default persistence engine, without heavy ORMs.
-Adopting another database engine requires a dedicated, accepted ADR before
-implementation or migration.
+Outbound adapters under `src/adapters/outbound/` implement `IncidentRepositoryPort`
+and MUST be replaceable without changing domain rules, use cases, or inbound
+contracts. SQLite and PostgreSQL adapters MUST implement the same port, including
+`check_health`; that operation MUST perform a real connectivity query against the
+selected persistence engine rather than report only process or configuration state.
+
+`src/adapters/outbound/factory.py` is the sole boundary that interprets
+`DATABASE_URL` and selects the repository implementation. `sqlite:///:memory:`
+MUST remain the default for development and fast tests. `postgresql://...` selects
+the PostgreSQL adapter for containerized and production deployments. Neither the
+domain, application, nor inbound adapters may inspect `DATABASE_URL` or select a
+database engine.
+
+SQLite's standard-library `sqlite3` driver and PostgreSQL's `psycopg[binary]`
+driver are permitted only in `src/adapters/outbound/`. Database drivers MUST NOT
+be imported by `src/domain/`, `src/application/`, or `src/adapters/inbound/`.
+Object-relational mappers, including SQLAlchemy and SQLModel, MUST NOT be used;
+outbound adapters retain explicit SQL. The `psycopg[binary]` dependency is
+authorized solely for the PostgreSQL outbound adapter.
+
+Both persistence adapters MUST store timestamps as ISO 8601 `TEXT`, normalized
+to UTC before persistence and after reading, so ordering and SLA behavior remain
+deterministic across engines. Production container topology MUST run the API and
+PostgreSQL as separate services using Docker Compose, with PostgreSQL based on
+`postgres:16-alpine`.
 
 ### V. Verifiable Quality
 Behavioral requirements MUST have BDD acceptance scenarios in `Given / When / Then`
@@ -67,14 +87,17 @@ verification.
 - Python MUST be version 3.10 or newer; `uv` manages project and development
   dependencies.
 - REST uses FastAPI and Pydantic v2; the terminal interface uses Typer.
-- SQLite3 is the standard-library persistence baseline. Heavy ORMs are not
-  permitted under this baseline.
+- SQLite uses the Python standard-library driver. PostgreSQL uses `psycopg[binary]`
+  without an ORM, exclusively in the outbound adapter layer.
+- Docker Compose is the production topology for separate API and PostgreSQL
+  services; the database service uses `postgres:16-alpine`.
 
 ## Quality Gates
 
 - `uv run ruff check src/` MUST pass, including configured rules that enforce
-  hexagonal import boundaries.
-- `uv run pytest -v` MUST pass before a change is accepted.
+  hexagonal import boundaries and prevent forbidden database-driver imports.
+- `uv run pytest -v` MUST pass before a change is accepted, including contract
+  parity for SQLite and PostgreSQL adapters and real connectivity checks.
 - Acceptance coverage MUST express behavior as BDD scenarios; adapter tests MUST
   exercise the shared use case rather than substitute business logic.
 
@@ -91,4 +114,4 @@ Constitution versions use semantic versioning: MAJOR for incompatible principle
 removals or redefinitions, MINOR for new or materially expanded principles or
 sections, and PATCH for clarifications and non-semantic edits.
 
-**Version**: 1.0.0 | **Ratified**: TODO(RATIFICATION_DATE): original adoption date unknown | **Last Amended**: 2026-11-23
+**Version**: 1.1.0 | **Ratified**: TODO(RATIFICATION_DATE): original adoption date unknown | **Last Amended**: 2026-11-24

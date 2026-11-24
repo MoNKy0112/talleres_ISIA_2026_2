@@ -1,6 +1,6 @@
 """Cálculo determinista de SLA continuo y en horario hábil."""
 
-from datetime import datetime, time, timedelta
+from datetime import datetime, time, timedelta, timezone
 from typing import Dict
 
 from src.domain.models import Incident, SLAEvaluation, SLARule, SeverityLevel
@@ -24,14 +24,11 @@ def get_sla_rule_for_severity(severity: SeverityLevel) -> SLARule:
     return SLA_POLICY_TABLE[severity]
 
 
-def _validate_datetime_pair(start: datetime, end: datetime) -> None:
-    """Valida que las marcas sean comparables y estén en la misma base horaria."""
-    start_offset = start.utcoffset()
-    end_offset = end.utcoffset()
-    if (start_offset is None) != (end_offset is None):
-        raise ValueError("Las fechas deben ser ambas ingenuas o ambas conscientes de zona horaria.")
-    if start_offset is not None and start.tzinfo != end.tzinfo:
-        raise ValueError("Las fechas conscientes deben usar la misma zona horaria.")
+def normalize_utc(value: datetime) -> datetime:
+    """Interpreta una fecha naive como UTC y convierte fechas aware a UTC."""
+    if value.tzinfo is None or value.utcoffset() is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
 
 
 def _business_minutes(start: datetime, end: datetime) -> int:
@@ -62,18 +59,18 @@ def _business_minutes(start: datetime, end: datetime) -> int:
 def evaluate_sla_status(incident: Incident, reference_time: datetime) -> SLAEvaluation:
     """Evalúa tiempo transcurrido, incumplimiento y escalamiento de un incidente."""
     rule = get_sla_rule_for_severity(incident.severity)
-    end_time = incident.resolved_at or reference_time
-    _validate_datetime_pair(incident.created_at, end_time)
+    created_at = normalize_utc(incident.created_at)
+    end_time = normalize_utc(incident.resolved_at or reference_time)
 
-    if end_time < incident.created_at:
+    if end_time < created_at:
         raise ValueError("El tiempo de referencia no puede ser anterior a la creación.")
 
     if rule.operates_24x7:
-        elapsed_minutes = int((end_time - incident.created_at).total_seconds() // 60)
+        elapsed_minutes = int((end_time - created_at).total_seconds() // 60)
     else:
-        elapsed_minutes = _business_minutes(incident.created_at, end_time)
+        elapsed_minutes = _business_minutes(created_at, end_time)
 
-    remaining_minutes = rule.max_resolution_minutes - elapsed_minutes
+    remaining_minutes = max(rule.max_resolution_minutes - elapsed_minutes, 0)
     is_breached = elapsed_minutes > rule.max_resolution_minutes
     escalation_limit = int(rule.max_resolution_minutes * rule.escalation_threshold_ratio)
     requires_escalation = is_breached or (
@@ -88,6 +85,11 @@ def evaluate_sla_status(incident: Incident, reference_time: datetime) -> SLAEval
         remaining_minutes=remaining_minutes,
         is_breached=is_breached,
         requires_escalation=requires_escalation,
+        component=incident.component,
+        status=incident.status,
+        exceeded_minutes=(
+            elapsed_minutes - rule.max_resolution_minutes if is_breached else None
+        ),
     )
 
 

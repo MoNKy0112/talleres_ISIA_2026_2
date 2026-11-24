@@ -8,4 +8,5 @@ ban-relative-imports = "parents"
 
 [lint.flake8-tidy-imports.banned-api]
 "sqlite3" = { msg = "Inbound adapters must use the outbound factory, not database drivers." }
+"psycopg" = { msg = "Inbound adapters must use the outbound factory, not database drivers." }
 "src.adapters.outbound.sqlite_repository" = { msg = "Inbound adapters must not depend on a concrete repository." }

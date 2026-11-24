@@ -2,7 +2,7 @@
 
 from typing import Protocol, runtime_checkable
 
-from src.domain.models import Incident
+from src.domain.models import Incident, IncidentStatus
 
 
 @runtime_checkable
@@ -13,12 +13,18 @@ class IncidentRepositoryPort(Protocol):
         """Persiste un incidente."""
 
     def get_incident(self, incident_id: str) -> Incident | None:
-        """Obtiene un incidente por identificador estable."""
+        """Obtiene un incidente o devuelve None cuando el ID no existe."""
+
+    def incident_id_exists(self, incident_id: str) -> bool:
+        """Indica si el identificador ya está persistido."""
 
     def find_open_duplicates(
-        self, component: str, duplicate_group_key: str
+        self,
+        duplicate_group_key: str,
+        open_statuses: frozenset[IncidentStatus],
+        exclude_incident_id: str,
     ) -> list[Incident]:
-        """Devuelve todas las coincidencias OPEN sin modificar el repositorio."""
+        """Consulta coincidencias usando la política de estados suministrada."""
 
     def list_active_incidents(
         self, component_filter: str | None = None
