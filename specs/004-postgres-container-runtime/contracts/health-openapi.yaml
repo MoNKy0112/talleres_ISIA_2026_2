@@ -1,0 +1,41 @@
+openapi: 3.1.0
+info:
+  title: IncidentOps Runtime Health
+  version: 1.0.0
+paths:
+  /health:
+    get:
+      operationId: getRuntimeHealth
+      summary: Check service and configured database connectivity
+      responses:
+        "200":
+          description: Configured repository answered its connectivity query
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+              example:
+                status: ok
+                database: connected
+        "503":
+          description: Configured repository is unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+              example:
+                status: error
+                database: unavailable
+components:
+  schemas:
+    HealthResponse:
+      type: object
+      additionalProperties: false
+      required: [status, database]
+      properties:
+        status:
+          type: string
+          enum: [ok, error]
+        database:
+          type: string
+          enum: [connected, unavailable]

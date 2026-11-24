@@ -2,11 +2,14 @@
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Literal, Optional
+from typing import FrozenSet, Literal, Optional
 
 SeverityLevel = Literal["P0", "P1", "P2", "P3"]
 IncidentStatus = Literal["OPEN", "IN_PROGRESS", "ESCALATION_REQUIRED", "RESOLVED"]
 RecommendedTeam = Literal["Backend-Core", "Platform-SRE", "Data-DBA", "Security-IAM"]
+OPEN_DUPLICATE_STATUSES: FrozenSet[IncidentStatus] = frozenset(
+    {"OPEN", "IN_PROGRESS", "ESCALATION_REQUIRED"}
+)
 
 
 @dataclass(frozen=True)
@@ -30,6 +33,9 @@ class Incident:
     status: IncidentStatus
     created_at: datetime
     resolved_at: Optional[datetime] = None
+    recommended_team: Optional[RecommendedTeam] = None
+    duplicate_group_key: Optional[str] = None
+    raw_text: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -43,6 +49,9 @@ class SLAEvaluation:
     remaining_minutes: int
     is_breached: bool
     requires_escalation: bool
+    component: str = ""
+    status: IncidentStatus = "OPEN"
+    exceeded_minutes: Optional[int] = None
 
 
 @dataclass(frozen=True)
@@ -56,4 +65,3 @@ class TriageResult:
     recommended_team: RecommendedTeam
     duplicate_group_key: str
     consistency_ratio: float = 1.0
-

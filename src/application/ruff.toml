@@ -1,0 +1,14 @@
+extend = "../../pyproject.toml"
+
+[lint]
+select = ["E4", "E7", "E9", "F", "TID"]
+
+[lint.flake8-tidy-imports]
+ban-relative-imports = "parents"
+
+[lint.flake8-tidy-imports.banned-api]
+"src.adapters" = { msg = "Application code must depend on ports, not adapters." }
+"fastapi" = { msg = "Application code must not depend on HTTP frameworks." }
+"typer" = { msg = "Application code must not depend on CLI frameworks." }
+"sqlite3" = { msg = "Application code must not depend on database drivers." }
+"psycopg" = { msg = "Application code must not depend on database drivers." }

@@ -1,0 +1,1 @@
+"""Adaptadores primarios de entrada."""

@@ -12,10 +12,9 @@ Este repositorio sirve como banco de pruebas práctico para la **Semana 1** de *
 - Dependencias declaradas en [`pyproject.toml`](pyproject.toml):
   - `tiktoken`: Para medir con precisión matemática el consumo de tokens BPE (`o200k_base` / `cl100k_base`) en las distintas estrategias de recolección de contexto.
 
-Para inicializar el entorno virtual e instalar `tiktoken`:
+Para inicializar el entorno virtual e instalar las dependencias:
 
 ```bash
-cd week-1/starter-project
 uv sync
 ```
 
@@ -23,7 +22,7 @@ uv sync
 
 ## Comandos Principales para la Práctica
 
-Ejecuta todos los comandos desde `week-1/starter-project/` usando `uv run`:
+Ejecuta los comandos desde la raíz de este repositorio usando `uv run`:
 
 ### 1. Fase 1 — Auditoría de Tokens con `tiktoken`: Fuerza Bruta vs. `grep` vs. LSP
 Compara cuántos tokens reales consume leer todos los archivos del repositorio (`glob` + `read`), leer los archivos `.py` coincidentes (`grep` + `read`) o extraer únicamente la definición, firmas de tipos y referencias de un símbolo como lo hace un servidor **LSP**:
@@ -47,16 +46,24 @@ Ejecuta el escenario con deuda técnica (escaneo completo en memoria y problema 
 uv run python -m src.incident_repository
 ```
 
-### 3. Fase 3 — Auditoría del Motor de Triaje (`src/triage_rules.py`)
+### 3. Fase 3 — Auditoría del Motor de Triaje (`src/domain/triage_rules.py`)
 Evalúa cómo el motor heurístico actual clasifica los 10 incidentes de [`data/sample_incidents.json`](data/sample_incidents.json) e identifica sus fallos de diseño:
 
 ```bash
-uv run python -m src.triage_rules
+uv run python -m src.domain.triage_rules
 ```
 
-### 4. Verificación del Cálculo Determinista de SLA (`src/sla_calculator.py`)
+### 4. Verificación del Cálculo Determinista de SLA (`src/domain/sla_calculator.py`)
 Ejecuta la demostración del cálculo de SLA actual (donde se evidencia el bug de horario hábil en tickets `P2`/`P3`):
 
 ```bash
-uv run python -m src.sla_calculator
+uv run python -m src.domain.sla_calculator
+```
+
+### 5. Aceptación del endpoint y CLI de triaje
+
+```bash
+uv run pytest
+uv run uvicorn src.adapters.inbound.api.app:app --reload
+uv run python -m src.adapters.inbound.cli triage --incident-id INC-1001 --raw-text "URGENTE: HTTP 502 en todas las transacciones con tarjeta; ningún comercio puede cobrar"
 ```

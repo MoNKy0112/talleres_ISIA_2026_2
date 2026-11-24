@@ -15,8 +15,8 @@ import sqlite3
 import time
 from typing import Any, Dict, List
 
-from src.models import Incident, SeverityLevel
-from src.sla_calculator import SLA_POLICY_TABLE, evaluate_sla_status
+from src.domain.models import Incident, SeverityLevel
+from src.domain.sla_calculator import SLA_POLICY_TABLE, evaluate_sla_status
 
 
 class IncidentRepository:
@@ -44,6 +44,7 @@ class IncidentRepository:
                 incident_id TEXT PRIMARY KEY,
                 title TEXT NOT NULL,
                 component TEXT NOT NULL,
+                duplicate_group_key TEXT NOT NULL,
                 severity TEXT NOT NULL,
                 status TEXT NOT NULL,
                 created_at TEXT NOT NULL,
@@ -86,6 +87,7 @@ class IncidentRepository:
                     f"INC-{idx:05d}",
                     f"Reporte sintético #{idx} en {comp}",
                     comp,
+                    f"{comp}:synthetic-{idx}",
                     sev,
                     status,
                     created.isoformat(),
@@ -97,8 +99,8 @@ class IncidentRepository:
         cursor.executemany(
             """
             INSERT OR REPLACE INTO incidents
-            (incident_id, title, component, severity, status, created_at, resolved_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            (incident_id, title, component, duplicate_group_key, severity, status, created_at, resolved_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             rows,
         )
@@ -136,6 +138,7 @@ class IncidentRepository:
                 incident_id=row["incident_id"],
                 title=row["title"],
                 component=row["component"],
+                duplicate_group_key=row["duplicate_group_key"],
                 severity=row["severity"],
                 status=row["status"],
                 created_at=datetime.fromisoformat(row["created_at"]),
@@ -191,4 +194,3 @@ def _run_benchmark() -> None:
 
 if __name__ == "__main__":
     _run_benchmark()
-

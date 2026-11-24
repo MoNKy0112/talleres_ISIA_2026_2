@@ -4,11 +4,11 @@ import json
 import re
 import unicodedata
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List
 
-from src.models import RecommendedTeam, SeverityLevel, TriageResult
+from src.domain.models import RecommendedTeam, SeverityLevel, TriageResult
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 SAMPLE_DATA_PATH = PROJECT_ROOT / "data" / "sample_incidents.json"
 
 
@@ -48,7 +48,7 @@ def classify_incident_report(incident_id: str, raw_text: str) -> TriageResult:
         )
     elif _has(text, "pasarela", "gateway de pagos", "cobros", "pagos", "pagar", "tarjeta") and _has(text, "502", "bad gateway", "cayo", "no pueden cobrar", "no pueden completar"):
         component = "payments-gateway"
-        symptom = "payment_http_502"
+        symptom = "http-502-outage"
         team = "Backend-Core"
         global_outage = _has(text, "todas las transacciones", "ningun comercio", "indisponibilidad global", "todos los comercios")
         severity = "P0" if global_outage else "P2"
