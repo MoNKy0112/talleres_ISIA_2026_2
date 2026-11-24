@@ -3,7 +3,7 @@
 from datetime import datetime, time, timedelta
 from typing import Dict
 
-from src.models import Incident, SLAEvaluation, SLARule, SeverityLevel
+from src.domain.models import Incident, SLAEvaluation, SLARule, SeverityLevel
 
 SLA_POLICY_TABLE: Dict[SeverityLevel, SLARule] = {
     "P0": SLARule(severity="P0", max_resolution_minutes=60, operates_24x7=True),
@@ -114,6 +114,7 @@ def _run_demo() -> None:
             incident_id=name,
             title=name,
             component="verification",
+            duplicate_group_key=f"verification:{name}",
             severity=severity,  # type: ignore[arg-type]
             status="OPEN",
             created_at=created_at,
@@ -134,6 +135,7 @@ def _run_demo() -> None:
         incident_id="P2 resuelto con incumplimiento",
         title="P2 resuelto con incumplimiento",
         component="verification",
+        duplicate_group_key="verification:p2-resolved-breach",
         severity="P2",
         status="RESOLVED",
         created_at=datetime(2026, 11, 9, 8),

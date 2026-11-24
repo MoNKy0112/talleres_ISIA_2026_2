@@ -26,6 +26,7 @@ class Incident:
     incident_id: str
     title: str
     component: str
+    duplicate_group_key: str
     severity: SeverityLevel
     status: IncidentStatus
     created_at: datetime
@@ -56,4 +57,3 @@ class TriageResult:
     recommended_team: RecommendedTeam
     duplicate_group_key: str
     consistency_ratio: float = 1.0
-

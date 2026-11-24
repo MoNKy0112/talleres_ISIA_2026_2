@@ -1,0 +1,92 @@
+openapi: 3.1.0
+info:
+  title: IncidentOps Active Incident Summary
+  version: 1.0.0
+  description: Read-only summary of active incidents and their SLA risk.
+paths:
+  /api/v1/incidents/summary:
+    get:
+      operationId: getActiveIncidentsSummary
+      summary: Get active incident summary
+      parameters:
+        - name: component
+          in: query
+          required: false
+          description: Exact component filter; omitted or blank means all components.
+          schema:
+            type: string
+        - name: reference_time
+          in: query
+          required: false
+          description: RFC 3339 timestamp with timezone, normalized to UTC and used consistently for all SLA evaluations; defaults to the current UTC instant. Legacy stored timestamps without an offset are interpreted as UTC.
+          schema:
+            type: string
+            format: date-time
+      responses:
+        "200":
+          description: Summary returned, including when no active incidents match.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActiveIncidentsSummaryResponse"
+              examples:
+                empty:
+                  summary: No active incidents
+                  value:
+                    total_active: 0
+                    breached_count: 0
+                    incidents: []
+        "422":
+          description: Invalid reference time or query parameter.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  detail:
+                    description: Input validation details.
+components:
+  schemas:
+    ActiveIncidentItem:
+      type: object
+      required:
+        - incident_id
+        - title
+        - component
+        - severity
+        - status
+        - elapsed_minutes
+        - requires_escalation
+      properties:
+        incident_id:
+          type: string
+        title:
+          type: string
+        component:
+          type: string
+        severity:
+          type: string
+          enum: [P0, P1, P2, P3]
+        status:
+          type: string
+          enum: [OPEN, IN_PROGRESS]
+        elapsed_minutes:
+          type: integer
+          minimum: 0
+          description: Minutes consumed under the severity's SLA policy.
+        requires_escalation:
+          type: boolean
+    ActiveIncidentsSummaryResponse:
+      type: object
+      required: [total_active, breached_count, incidents]
+      properties:
+        total_active:
+          type: integer
+          minimum: 0
+        breached_count:
+          type: integer
+          minimum: 0
+        incidents:
+          type: array
+          items:
+            $ref: "#/components/schemas/ActiveIncidentItem"
